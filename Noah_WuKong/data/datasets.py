@@ -42,6 +42,7 @@ class ImageNetDataset(Dataset):
     def get_data(self):
         folder = os.path.join(self.root, self.split_folder[self.split])
         classes, class_to_idx = self._find_classes(folder)
+        logger.debug(f"classes:{classes}, class_to_idx:{class_to_idx}")
         samples = make_dataset(folder, class_to_idx, is_valid_file=is_image_file)
         data, targets = zip(*samples)
         logger.info(f"Dataset summary: #examples={len(data)}; #classes={len(classes)}")
@@ -60,7 +61,9 @@ class ImageNetDataset(Dataset):
         for c in self.class_names:
             label = map(lambda x: x.replace("{}", c), text_templates)
             text_labels.extend(label)
+        logger.info(f"text_labels:{text_labels}")
         token = self.tokenizer.tokenize(text_labels)
+        logger.info(f"token:{token.shape}")  # tensor [len(text_labels), 32]
         return token
 
     def __getitem__(self, index):
@@ -75,6 +78,7 @@ class ImageNetDataset(Dataset):
 
     @staticmethod
     def _find_classes(root_dir):
+        logger.debug(f"root_dir:{root_dir}")
         classes = [d.name for d in os.scandir(root_dir) if d.is_dir()]
         classes.sort()
         class_to_idx = {classes[i]: i for i in range(len(classes))}

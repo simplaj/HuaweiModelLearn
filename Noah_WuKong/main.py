@@ -55,17 +55,21 @@ def img_transform(n_px):
 @torch.no_grad()
 def get_text_features(model, dataset, prompts, num_classes):
     num_prompts = 1 if isinstance(prompts, str) else len(prompts)
-    texts = dataset.get_text_labels(prompts).cuda()
+    texts = dataset.get_text_labels(prompts)  #.cuda()
+    logger.info(f"texts shape:{texts.shape}")
     text_batch_size = 1024
     text_features = []
 
     for i in range((len(texts) // text_batch_size) + 1):
         text = texts[i * text_batch_size: (i + 1) * text_batch_size]
+        logger.info(f"text:{text}")
         if len(text):
             text_features_ = model.encode_text(text)
             text_features_ = model.process_text_features(text_features_, text)
             text_features.append(text_features_)
     text_features = torch.cat(text_features)
+
+    logger.info(f"text_features shape:{text_features.shape}")
     # prompt ensemble
     if num_prompts > 1:
         text_features = text_features.reshape(
@@ -108,10 +112,12 @@ def eval(dataloader, model, prompt="{}", eval_ensemble_prompts=True):
 
     results = dict()
     for idx, data in enumerate(dataloader):
-        imgs, targets = map(lambda x: x.cuda(), data)
+        imgs, targets = map(lambda x: x, data)
         image_features = model.encode_image(imgs)
         image_features = model.process_img_features(image_features)
+        logger.info(f"image_features:{image_features.shape},text_feature:{text_features.shape}")
         logits = get_logits(image_features, text_features, model.is_token_wise)
+        logger.info(f"logits:{logits}")
         # calculate accuracy
         acc1, acc5 = calculate_accuracy(logits, targets)
         results.setdefault("Top1_acc", []).append(acc1)
@@ -139,21 +145,40 @@ def eval(dataloader, model, prompt="{}", eval_ensemble_prompts=True):
     return results
 
 
+from data.tokenizer import SimpleTokenizer
+def chineseToText(chineseLabels, tokenizer, model):
+    texts = tokenizer.tokenize(chineseLabels)
+    text_batch_size = 1024
+    text_features = []
+
+    for i in range((len(texts) // text_batch_size) + 1):
+        text = texts[i * text_batch_size: (i + 1) * text_batch_size]
+        logger.info(f"text:{text}")
+        if len(text):
+            text_features_ = model.encode_text(text)
+            text_features_ = model.process_text_features(text_features_, text)
+            text_features.append(text_features_)
+    text_features = torch.cat(text_features)
+
+    
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Wukong Arguments")
     parser.add_argument(
-        "--config", type=str, required=True, help="Model config file.")
+        "--config", type=str, default="configs/wukong_vit_b/wukong_vit_b.py",
+        help="Model config file.")
     parser.add_argument(
-        "--checkpoint", type=str, required=True, help="Model checkpoint file."
+        "--checkpoint", type=str, default="cache/ckp/vit_b.pth",
+        help="Model checkpoint file."
     )
     parser.add_argument(
         "--data_dir",
         type=str,
-        required=True,
+        default="cache/data/ILSVRC/",
         help="ImageNet data directory (.e.g, 'ILSVRC').",
     )
     parser.add_argument(
-        "--batch_size", type=int, default=128, help="Batch size of data loading."
+        "--batch_size", type=int, default=1, help="Batch size of data loading."
     )
     return parser.parse_args()
 
@@ -166,7 +191,7 @@ if __name__ == "__main__":
     config.model.pretrained = args.checkpoint
     # build model
     logger.info(f"Building model for evaluation.")
-    model = build_model(config.model).cuda()
+    model = build_model(config.model)  #.cuda()
     model.eval()
     input_resolution = model.visual.input_resolution
     transform = img_transform(model.visual.input_resolution)
@@ -182,7 +207,7 @@ if __name__ == "__main__":
     # start evaluation
     logger.info(f"Staring evaluation.")
     time_s = time.time()
-    results = eval(dataloader, model)
+    results = eval(dataloader, model, eval_ensemble_prompts=False)
     # show results
     log_info = [f"{k}: {v:.3f}" for k, v in results.items()]
     logger.info(f"[Results] {'; '.join(log_info)}")

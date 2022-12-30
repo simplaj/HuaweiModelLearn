@@ -48,8 +48,8 @@ Below is an example for evaluating using Wukong_ViT-L model.
 
 ```shell
 python main.py \
-  --config="configs/wukong_vit_l/wukong_vit_l.py" \
-  --checkpoint="/cache/ckpt/wukong_vit_l.ckpt" \
+  --config="configs/wukong_vit_b/wukong_vit_b.py" \
+  --checkpoint="/cache/ckp/vit_b.pth" \
   --data_dir="/cache/data/ILSVRC/"
 ```
 
